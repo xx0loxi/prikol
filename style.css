@@ -2,30 +2,56 @@ body {
     margin: 0;
     padding: 0;
     background: #0a0a0a;
-    font-family: 'Courier New', monospace;
-    color: #e0e0e0;
+    font-family: 'Segoe UI', 'Arial', sans-serif; /* Более читаемый шрифт */
+    color: #f0f0f0; /* Светлый текст */
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
+    line-height: 1.6; /* Увеличенный межстрочный интервал */
 }
 .container {
     background: #1a1a1a;
-    border: 1px solid #333;
+    border: 1px solid #444;
     padding: 30px;
-    max-width: 450px;
+    max-width: 500px; /* Чуть шире */
     width: 90%;
-    border-radius: 8px;
-    box-shadow: 0 0 20px rgba(0,255,0,0.1);
+    border-radius: 12px;
+    box-shadow: 0 0 20px rgba(0,255,0,0.15);
 }
 h1 {
     text-align: center;
     color: #00ff88;
-    margin-bottom: 20px;
+    margin-bottom: 25px;
+    font-size: 1.8rem;
+    letter-spacing: 1px;
 }
 #info-block p {
-    border-bottom: 1px dashed #333;
-    padding: 8px 0;
+    border-bottom: 1px dashed #444;
+    padding: 10px 0; /* Больше воздуха */
     margin: 0;
-    font-size: 0.95rem;
+    font-size: 1.05rem; /* Крупнее текст */
+    font-weight: 500;
+}
+
+/* Адаптив для мобильных устройств */
+@media (max-width: 480px) {
+    body {
+        align-items: flex-start;
+        padding-top: 20px;
+    }
+    .container {
+        padding: 20px 15px;
+        width: 94%;
+        max-width: 100%;
+        margin: 0 auto;
+    }
+    h1 {
+        font-size: 1.5rem;
+        margin-bottom: 15px;
+    }
+    #info-block p {
+        font-size: 0.95rem;
+        padding: 8px 0;
+    }
 }
