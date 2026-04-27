@@ -1,3 +1,4 @@
+// Вспомогательная функция для геолокации
 async function getGeoInfo() {
     try {
         const resp = await fetch('https://ipapi.co/json/');
@@ -9,71 +10,93 @@ async function getGeoInfo() {
     }
 }
 
-// ---- НОВАЯ ФУНКЦИЯ: Получение точной информации об устройстве ----
-async function getDeviceAndBrowserInfo() {
-    // Пытаемся получить данные через современный API Client Hints
+// --- НОВЫЙ ПОДХОД: Определение модели и ОС через getHighEntropyValues() ---
+async function getAccurateDeviceInfo() {
+    // Стандартные значения по умолчанию
+    let model = 'Неизвестно';
+    let platform = 'Неизвестно';
+    let osVersion = 'Неизвестно';
+
     try {
-        // Вызываем метод библиотеки, который сам обращается к API браузера
-        const result = await UAParser().withClientHints();
-        return {
-            device: result.device,
-            os: result.os,
-            browser: result.browser
-        };
-    } catch (e) {
-        console.warn('Client Hints не сработали, fallback на обычный парсинг', e);
-        // Если API недоступен (старый браузер), используем старый метод
-        const parser = new UAParser();
-        return {
-            device: parser.getDevice(),
-            os: parser.getOS(),
-            browser: parser.getBrowser()
-        };
-    }
-}
+        if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+            // Запрашиваем все необходимые высокоэнтропийные данные
+            const hints = await navigator.userAgentData.getHighEntropyValues([
+                "model",           // Модель устройства
+                "platform",       // Платформа (например, "Android", "Windows")
+                "platformVersion" // Версия ОС (например, "16", "10.0")
+            ]);
 
-function formatDeviceInfo(device, os) {
-    let model = device.model || '';
-    const type = device.type || '';
-    const vendor = device.vendor || '';
-    const osName = os.name || 'Неизвестно';
-    const osVersion = os.version || '';
+            // 1. Определяем модель
+            if (hints.model && hints.model.trim() !== '') {
+                model = hints.model;
+            } else if (navigator.userAgentData.mobile) {
+                // Если модель не пришла, но это мобильное устройство
+                model = 'Мобильное устройство';
+            } else {
+                // Для ПК часто модель не приходит, поэтому используем ПК
+                model = 'ПК';
+            }
 
-    // Если модель не определилась, пробуем подставить вендора или тип
-    if (!model || model === 'K' || model.length <= 1) {
-        if (type) {
-            model = type === 'mobile' ? 'Мобильное устройство' : type;
-        } else if (vendor) {
-            model = vendor;
-        } else {
-            model = 'Неизвестно';
+            // 2. Определяем платформу и версию ОС
+            if (hints.platform) {
+                platform = hints.platform;
+                // Приводим к удобочитаемому виду
+                if (platform.toLowerCase().includes('android')) {
+                    platform = 'Android';
+                } else if (platform.toLowerCase().includes('ios') || platform.toLowerCase().includes('macos')) {
+                    // Для iPhone/iPad платформа обычно "iOS" или "macOS" в зависимости от контекста
+                    // Но getHighEntropyValues может вернуть "iOS"
+                    platform = 'iPhone';
+                } else if (platform.toLowerCase().includes('windows')) {
+                    platform = 'ПК (Windows)';
+                } else if (platform.toLowerCase().includes('mac')) {
+                    platform = 'ПК (Mac)';
+                } else if (platform.toLowerCase().includes('linux')) {
+                    platform = 'ПК (Linux)';
+                }
+            }
+
+            // 3. Определяем версию ОС
+            if (hints.platformVersion) {
+                osVersion = hints.platformVersion;
+            }
+
+            return { model, platform, osVersion };
         }
+    } catch (e) {
+        console.warn('getHighEntropyValues failed, falling back to UAParser', e);
     }
 
-    let platform;
-    const osLower = osName.toLowerCase();
-    if (osLower.includes('android')) {
-        platform = 'Android';
-    } else if (osLower.includes('ios') || osLower.includes('iphone') || osLower.includes('ipad')) {
-        platform = 'iPhone';
-    } else if (osLower.includes('windows')) {
-        platform = 'ПК (Windows)';
-    } else if (osLower.includes('mac')) {
-        platform = 'ПК (Mac)';
-    } else if (osLower.includes('linux')) {
-        platform = 'ПК (Linux)';
-    } else {
-        platform = 'Неизвестно';
+    // Фолбэк на UAParser, если getHighEntropyValues не поддерживается или вернул ошибку
+    try {
+        const parser = new UAParser();
+        const result = parser.getResult();
+        
+        if (result.device && result.device.model) {
+            model = result.device.model;
+        } else if (result.device && result.device.type) {
+            model = result.device.type;
+        }
+
+        if (result.os && result.os.name) {
+            platform = result.os.name;
+        }
+
+        if (result.os && result.os.version) {
+            osVersion = result.os.version;
+        }
+    } catch (e) {
+        console.error('UAParser fallback error:', e);
     }
 
-    return {
-        model,
-        platform,
-        os: `${osName} ${osVersion}`.trim()
-    };
+    return { model, platform, osVersion };
 }
 
-function formatBrowserInfo(browser) {
+// --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (без изменений) ---
+
+function formatBrowserInfo() {
+    const parser = new UAParser();
+    const browser = parser.getBrowser();
     if (!browser) return { name: 'Неизвестно', version: '' };
     return {
         name: browser.name || 'Неизвестно',
@@ -81,7 +104,6 @@ function formatBrowserInfo(browser) {
     };
 }
 
-// Скрин
 function getScreenInfo() {
     return {
         width: window.screen.width,
@@ -91,7 +113,6 @@ function getScreenInfo() {
     };
 }
 
-// Батарея
 async function getBatteryInfo() {
     try {
         if (!navigator.getBattery) return null;
@@ -105,7 +126,6 @@ async function getBatteryInfo() {
     }
 }
 
-// Память
 function getMemoryInfo() {
     if (navigator.deviceMemory) {
         return navigator.deviceMemory + ' GB';
@@ -117,12 +137,10 @@ function getMemoryInfo() {
     return 'неизвестно';
 }
 
-// Ядра CPU
 function getCpuCores() {
     return navigator.hardwareConcurrency || 'неизвестно';
 }
 
-// Сеть
 function getConnectionInfo() {
     const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
     if (!conn) return null;
@@ -134,7 +152,6 @@ function getConnectionInfo() {
     };
 }
 
-// WebRTC IP
 function getWebRTCIPs() {
     return new Promise((resolve) => {
         const ips = [];
@@ -163,53 +180,55 @@ function getWebRTCIPs() {
     });
 }
 
-// ---- ОСНОВНАЯ ФУНКЦИЯ ОТОБРАЖЕНИЯ ----
+// --- ГЛАВНАЯ ФУНКЦИЯ ОТОБРАЖЕНИЯ ---
 async function showInfo() {
     const block = document.getElementById('info-block');
-    const geo = await getGeoInfo();
-
-    // Получаем точные данные об устройстве
-    const { device, os, browser } = await getDeviceAndBrowserInfo();
-    const formattedDevice = formatDeviceInfo(device, os);
-    const formattedBrowser = formatBrowserInfo(browser);
+    
+    // Запускаем все запросы параллельно для скорости
+    const [geo, deviceInfo, browserInfo, screen, battery, memory, cores, connection, webrtcIPs] = await Promise.all([
+        getGeoInfo(),
+        getAccurateDeviceInfo(),
+        formatBrowserInfo(),
+        getScreenInfo(),
+        getBatteryInfo(),
+        getMemoryInfo(),
+        getCpuCores(),
+        getConnectionInfo(),
+        getWebRTCIPs()
+    ]);
 
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const screen = getScreenInfo();
-    const battery = await getBatteryInfo();
-    const memory = getMemoryInfo();
-    const cores = getCpuCores();
-    const connection = getConnectionInfo();
-    const webrtcIPs = await getWebRTCIPs();
 
     let html = '';
-    html += `<p>IP: ${geo?.ip || 'не определён'}</p>`;
-    html += `<p>Страна: ${geo?.country_name || 'не определена'} (${geo?.country_code || 'N/A'})</p>`;
-    html += `<p>Область: ${geo?.region || 'не определён'}</p>`;
-    html += `<p>Почтовый индекс: ${geo?.postal || 'не определён'}</p>`;
-    html += `<p>Провайдер: ${geo?.org || 'не определён'}</p>`;
-    html += `<p>Часовой пояс: ${timeZone}</p>`;
-    html += `<p>Модель устройства: ${formattedDevice.model}</p>`;
-    html += `<p>Платформа: ${formattedDevice.platform}</p>`;
-    html += `<p>ОС: ${formattedDevice.os}</p>`;
-    html += `<p>Браузер: ${formattedBrowser.name} ${formattedBrowser.version}</p>`;
-    html += `<p>Экран: ${screen.width}x${screen.height}, глубина: ${screen.colorDepth} bit, pixelRatio: ${screen.pixelRatio}</p>`;
+    html += `<p><strong>IP:</strong> ${geo?.ip || 'не определён'}</p>`;
+    html += `<p><strong>Страна:</strong> ${geo?.country_name || 'не определена'} (${geo?.country_code || 'N/A'})</p>`;
+    html += `<p><strong>Область:</strong> ${geo?.region || 'не определён'}</p>`;
+    html += `<p><strong>Почтовый индекс:</strong> ${geo?.postal || 'не определён'}</p>`;
+    html += `<p><strong>Провайдер:</strong> ${geo?.org || 'не определён'}</p>`;
+    html += `<p><strong>Часовой пояс:</strong> ${timeZone}</p>`;
+    html += `<p><strong>Модель устройства:</strong> ${deviceInfo.model}</p>`;
+    html += `<p><strong>Платформа:</strong> ${deviceInfo.platform}</p>`;
+    html += `<p><strong>ОС:</strong> ${deviceInfo.platform} ${deviceInfo.osVersion}</p>`;
+    html += `<p><strong>Браузер:</strong> ${browserInfo.name} ${browserInfo.version}</p>`;
+    html += `<p><strong>Экран:</strong> ${screen.width}x${screen.height}, глубина: ${screen.colorDepth} bit, pixelRatio: ${screen.pixelRatio}</p>`;
     if (battery) {
-        html += `<p>Батарея: ${battery.level}, заряжается: ${battery.charging}</p>`;
+        html += `<p><strong>Батарея:</strong> ${battery.level}, заряжается: ${battery.charging}</p>`;
     } else {
-        html += `<p>Батарея: информация недоступна</p>`;
+        html += `<p><strong>Батарея:</strong> информация недоступна</p>`;
     }
-    html += `<p>ОЗУ: ${memory}</p>`;
-    html += `<p>Ядер CPU: ${cores}</p>`;
+    html += `<p><strong>ОЗУ:</strong> ${memory}</p>`;
+    html += `<p><strong>Ядер CPU:</strong> ${cores}</p>`;
     if (connection) {
-        html += `<p>Сеть: тип ${connection.type}, эффективный тип ${connection.effectiveType}, скорость ${connection.downlink}, RTT ${connection.rtt}</p>`;
+        html += `<p><strong>Сеть:</strong> тип ${connection.type}, эффективный тип ${connection.effectiveType}, скорость ${connection.downlink}, RTT ${connection.rtt}</p>`;
     } else {
-        html += `<p>Сеть: информация недоступна</p>`;
+        html += `<p><strong>Сеть:</strong> информация недоступна</p>`;
     }
     if (webrtcIPs.length > 0) {
-        html += `<p>Локальные IP (WebRTC): ${webrtcIPs.join(', ')}</p>`;
+        html += `<p><strong>Локальные IP (WebRTC):</strong> ${webrtcIPs.join(', ')}</p>`;
     } else {
-        html += `<p>Локальные IP (WebRTC): не обнаружены</p>`;
+        html += `<p><strong>Локальные IP (WebRTC):</strong> не обнаружены</p>`;
     }
+    
     block.innerHTML = html;
 }
 
